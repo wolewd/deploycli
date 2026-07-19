@@ -19,7 +19,9 @@ jobs:
           go-version: "1.22"
           cache: false
 
-      - run: go build -ldflags "-X deploycli/internal/static.Version=${{ github.ref_name }}" -o deploycli .
+      - run: go build -ldflags "-s -w -X deploycli/internal/static.Version=${{ github.ref_name }}" -o deploycli .
+
+      - run: sudo apt install -y upx && upx --best deploycli
 
       - uses: softprops/action-gh-release@v2
         with:
