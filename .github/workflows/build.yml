@@ -1,4 +1,4 @@
-name: build
+name: release
 
 on:
   push:
@@ -17,7 +17,6 @@ jobs:
 
       - run: go build -ldflags "-X deploycli/internal/static.Version=${{ github.ref_name }}" -o deploycli .
 
-      - uses: actions/upload-artifact@v4
+      - uses: softprops/action-gh-release@v2
         with:
-          name: deploycli-${{ github.ref_name }}
-          path: deploycli
+          files: deploycli
