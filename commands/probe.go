@@ -8,9 +8,9 @@ import (
 	"deploycli/internal/static"
 )
 
-// reportProbeError maps a ProbeConnection error to an actionable message
-// and exits with the given code.
-func reportProbeError(log *output.Logger, target *shell.Target, err error, code int) {
+// fatalProbeError maps a ProbeConnection error to an actionable message
+// and exits with the given code. It never returns.
+func fatalProbeError(log *output.Logger, target *shell.Target, err error, code int) {
 	switch err {
 	case shell.ErrPubkeyRejected:
 		log.Error("Cannot access %s using the RSA key. Register the key with:\n  ssh-copy-id %s", target.UserHost(), target.UserHost())

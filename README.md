@@ -87,7 +87,9 @@ Saves one or more images into a single tar archive and uploads it to the VPS via
 deploycli remote-rebuild [user]@[ip]:[deploy_path] --image [image]:[tag] [--image ...] [--port 22] [--json]
 ```
 
-Over SSH: stops the stack, removes old images, loads the new bundle, and brings everything back up. All steps run in a single session so they share the same working directory.
+Over SSH: stops the stack, loads the new bundle, brings everything back
+up, and prunes dangling images. All steps run in a single session so they
+share the same working directory.
 
 ### remote-status
 

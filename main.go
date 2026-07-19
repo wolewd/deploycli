@@ -10,13 +10,14 @@ import (
 	"os"
 
 	"deploycli/commands"
+	"deploycli/internal/exitcode"
 	"deploycli/internal/static"
 )
 
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
-		os.Exit(1)
+		os.Exit(exitcode.GeneralErr)
 	}
 
 	cmd := os.Args[1]
@@ -42,7 +43,7 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "ERROR: unknown command %q\n\n", cmd)
 		printUsage()
-		os.Exit(1)
+		os.Exit(exitcode.GeneralErr)
 	}
 }
 

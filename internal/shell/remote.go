@@ -18,9 +18,7 @@ type Target struct {
 	Port string
 }
 
-// ParseTarget parses "user@ip:path" into its components. port is used as
-// the default when the caller didn't set one (deploycli always passes "22"
-// as the default from parseArgs).
+// ParseTarget parses "user@ip:path" into its components.
 func ParseTarget(raw string, port string) (*Target, error) {
 	atIdx := strings.Index(raw, "@")
 	colonIdx := strings.Index(raw, ":")
@@ -43,14 +41,17 @@ func (t *Target) UserHost() string {
 	return fmt.Sprintf("%s@%s", t.User, t.Host)
 }
 
-// sshBaseArgs builds the shared SSH option list: non-interactive and
-// auto-accepting new host keys (so first-time connections don't hang).
-func sshBaseArgs(port string) []string {
+// sshOpts returns the shared -o flags for non-interactive SSH/SCP.
+func sshOpts() []string {
 	return []string{
 		"-o", static.SSHOptBatchMode,
 		"-o", static.SSHOptStrictHostKeyChecking,
-		"-p", port,
 	}
+}
+
+// sshBaseArgs builds a full SSH argument list from sshOpts plus the port.
+func sshBaseArgs(port string) []string {
+	return append(sshOpts(), "-p", port)
 }
 
 // RunRemote runs a single command over SSH, streaming output to stderr.
@@ -115,13 +116,7 @@ func ProbeConnection(t *Target) error {
 
 func ScpUpload(t *Target, localPath, remoteDir string) error {
 	dest := fmt.Sprintf("%s:%s/", t.UserHost(), strings.TrimSuffix(remoteDir, "/"))
-	args := []string{
-		"-o", static.SSHOptBatchMode,
-		"-o", static.SSHOptStrictHostKeyChecking,
-		"-P", t.Port,
-		localPath,
-		dest,
-	}
+	args := append(sshOpts(), "-P", t.Port, localPath, dest)
 	cmd := exec.Command(static.BinSCP, args...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr

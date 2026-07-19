@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
 
 	"deploycli/internal/static"
@@ -22,7 +23,7 @@ type parsedArgs struct {
 	json       bool
 }
 
-func parseArgs(args []string) parsedArgs {
+func parseArgs(args []string) (parsedArgs, error) {
 	p := parsedArgs{port: static.DefaultSSHPort}
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -30,22 +31,28 @@ func parseArgs(args []string) parsedArgs {
 		case a == "--json":
 			p.json = true
 		case a == "--image":
-			if i+1 < len(args) {
-				p.images = append(p.images, args[i+1])
-				i++
+			if i+1 >= len(args) {
+				return parsedArgs{}, fmt.Errorf("--image requires a value")
 			}
+			p.images = append(p.images, args[i+1])
+			i++
 		case strings.HasPrefix(a, "--image="):
-			p.images = append(p.images, strings.TrimPrefix(a, "--image="))
-		case a == "--port":
-			if i+1 < len(args) {
-				p.port = args[i+1]
-				i++
+			val := strings.TrimPrefix(a, "--image=")
+			if val == "" {
+				return parsedArgs{}, fmt.Errorf("--image= requires a value")
 			}
+			p.images = append(p.images, val)
+		case a == "--port":
+			if i+1 >= len(args) {
+				return parsedArgs{}, fmt.Errorf("--port requires a value")
+			}
+			p.port = args[i+1]
+			i++
 		case strings.HasPrefix(a, "--port="):
 			p.port = strings.TrimPrefix(a, "--port=")
 		default:
 			p.positional = append(p.positional, a)
 		}
 	}
-	return p
+	return p, nil
 }
