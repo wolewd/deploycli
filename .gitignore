@@ -31,5 +31,6 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# binary build
+# binary build and private script
 deploycli
+*.sh

@@ -26,7 +26,7 @@ func Send(args []string) {
 		needsProbe:    true,
 		needsImages:   true,
 		run: func(p parsedArgs, log *output.Logger, target *shell.Target) {
-			tempDir, err := os.MkdirTemp("", "deploycli-send-*")
+			tempDir, err := os.MkdirTemp(".", "deploycli-send-*")
 			if err != nil {
 				log.Error("failed to create local temp directory: %v", err)
 				os.Exit(exitcode.TransferErr)
