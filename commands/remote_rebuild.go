@@ -29,7 +29,7 @@ func RemoteRebuild(args []string) {
 				"docker compose down",
 				"docker load -i bundle.tar",
 				"rm -f bundle.tar",
-				"docker compose up -d",
+				"docker compose up -d --wait",
 				"docker image prune -f",
 			}
 

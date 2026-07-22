@@ -37,7 +37,7 @@ Needs Go 1.22+. No dependencies outside the standard library.
 | `sshd` | accept connections |
 | `docker` + `docker compose` v2 | load images, run containers |
 
-deploycli assumes the VPS already has a working docker-compose setup (or swarm, or whatever orchestrator you use). It does not provision anything. `remote-rebuild` runs `docker compose down`, loads new images, and runs `docker compose up -d`. The `docker-compose.yml` is yours to maintain.
+deploycli assumes the VPS already has a working docker-compose setup (or swarm, or whatever orchestrator you use). It does not provision anything. `remote-rebuild` runs `docker compose down`, loads new images, and runs `docker compose up -d --wait`. The `docker-compose.yml` is yours to maintain.
 
 **Before you start:**
 
@@ -88,8 +88,8 @@ deploycli remote-rebuild [user]@[ip]:[deploy_path] --image [image]:[tag] [--imag
 ```
 
 Over SSH: stops the stack, loads the new bundle, brings everything back
-up, and prunes dangling images. All steps run in a single session so they
-share the same working directory.
+up (waits for healthy containers if a healthcheck is defined), and prunes
+dangling images.
 
 ### remote-status
 
