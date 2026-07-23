@@ -1,8 +1,12 @@
 package commands
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"deploycli/internal/exitcode"
@@ -45,6 +49,14 @@ func Send(args []string) {
 			}
 			log.StepResult("docker-save", true, time.Since(start), map[string]any{"images": p.images})
 
+			// Compute local hash before upload so we can verify after.
+			localHash, err := fileSHA256(bundlePath)
+			if err != nil {
+				os.RemoveAll(tempDir)
+				log.Error("failed to hash bundle: %v", err)
+				os.Exit(exitcode.TransferErr)
+			}
+
 			log.Step("Uploading bundle to %s:%s", target.UserHost(), target.Path)
 			start = time.Now()
 			if err := shell.ScpUpload(target, bundlePath, target.Path); err != nil {
@@ -54,6 +66,34 @@ func Send(args []string) {
 				os.Exit(exitcode.TransferErr)
 			}
 			log.StepResult("scp-upload", true, time.Since(start), nil)
+
+			remoteBundle := target.Path + "/bundle.tar"
+			out, err := shell.RunRemoteCapture(target, "sha256sum "+remoteBundle)
+			if err != nil {
+				os.RemoveAll(tempDir)
+				log.Error("failed to verify bundle on remote: %v", err)
+				os.Exit(exitcode.TransferErr)
+			}
+			remoteHash := strings.Fields(out)[0]
+			if remoteHash != localHash {
+				os.RemoveAll(tempDir)
+				shell.RunRemote(target, "rm -f "+remoteBundle) // best-effort cleanup
+				log.Error("bundle integrity check failed. local=%s remote=%s", localHash, remoteHash)
+				os.Exit(exitcode.TransferErr)
+			}
 		},
 	})
-}
+	}
+
+	func fileSHA256(path string) (string, error) {
+		f, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+		defer f.Close()
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%x", h.Sum(nil)), nil
+	}
