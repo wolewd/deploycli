@@ -25,7 +25,6 @@ func Send(args []string) {
 		usage:         "deploycli send [user]@[ip]:[deploy_path] --image [image_name]:[image_tag] [--image ...] [--port 22]",
 		exitCode:      exitcode.TransferErr,
 		binaries:      []string{static.BinDocker, static.BinSCP, static.BinSSH},
-		checkDaemon:   true,
 		needsTarget:   true,
 		needsProbe:    true,
 		needsImages:   true,
@@ -49,7 +48,6 @@ func Send(args []string) {
 			}
 			log.StepResult("docker-save", true, time.Since(start), map[string]any{"images": p.images})
 
-			// Compute local hash before upload so we can verify after.
 			localHash, err := fileSHA256(bundlePath)
 			if err != nil {
 				os.RemoveAll(tempDir)
@@ -77,23 +75,23 @@ func Send(args []string) {
 			remoteHash := strings.Fields(out)[0]
 			if remoteHash != localHash {
 				os.RemoveAll(tempDir)
-				shell.RunRemote(target, "rm -f "+remoteBundle) // best-effort cleanup
+				shell.RunRemote(target, "rm -f "+remoteBundle)
 				log.Error("bundle integrity check failed. local=%s remote=%s", localHash, remoteHash)
 				os.Exit(exitcode.TransferErr)
 			}
 		},
 	})
-	}
+}
 
-	func fileSHA256(path string) (string, error) {
-		f, err := os.Open(path)
-		if err != nil {
-			return "", err
-		}
-		defer f.Close()
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%x", h.Sum(nil)), nil
+func fileSHA256(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
 	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
