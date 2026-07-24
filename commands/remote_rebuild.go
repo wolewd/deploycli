@@ -27,8 +27,6 @@ func RemoteRebuild(args []string) {
 			steps := []string{
 				fmt.Sprintf("cd %s", target.Path),
 				"docker compose down",
-				"docker load -i bundle.tar",
-				"rm -f bundle.tar",
 				"docker compose up -d --wait",
 				"docker image prune -f",
 			}

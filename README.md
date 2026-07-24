@@ -27,8 +27,8 @@ Needs Go 1.22+. No dependencies outside the standard library.
 | Tool | Why |
 |---|---|
 | `git` | pull source |
-| `docker` (daemon running) | build and save images |
-| `ssh`, `scp` | connect to the VPS, ship bundles |
+| `docker` (daemon running) | build and pipe images |
+| `ssh`, `gzip` | connect to the VPS, compress and stream bundles |
 
 **On the VPS:**
 
@@ -37,7 +37,7 @@ Needs Go 1.22+. No dependencies outside the standard library.
 | `sshd` | accept connections |
 | `docker` + `docker compose` v2 | load images, run containers |
 
-deploycli assumes the VPS already has a working docker-compose setup (or swarm, or whatever orchestrator you use). It does not provision anything. `remote-rebuild` runs `docker compose down`, loads new images, and runs `docker compose up -d --wait`. The `docker-compose.yml` is yours to maintain.
+deploycli assumes the VPS already has a working docker-compose setup (or swarm, or whatever orchestrator you use). It does not provision anything. `remote-rebuild` runs `docker compose down` and `docker compose up -d --wait`. The `docker-compose.yml` is yours to maintain.
 
 **Before you start:**
 
@@ -45,7 +45,7 @@ deploycli assumes the VPS already has a working docker-compose setup (or swarm, 
 - The SSH user on the VPS needs to be in the `docker` group. The CLI never runs `sudo` because a sudo prompt would hang a non-interactive subprocess.
 - It uses `~/.ssh/id_rsa`. There's no config file and no `--key` flag.
 
-Each command checks only the tools it actually needs. `fetch` checks for `git`, `send` checks for `docker` + `scp` + `ssh`, and so on.
+Each command checks only the tools it actually needs. `fetch` checks for `git`, `send` checks for `docker` + `ssh`, and so on.
 
 ## Commands
 
@@ -79,7 +79,9 @@ Builds a single Docker image (no cache, cleans up intermediate containers). One 
 deploycli send [user]@[ip]:[deploy_path] --image [image]:[tag] [--image ...] [--port 22] [--json]
 ```
 
-Saves one or more images into a single tar archive and uploads it to the VPS via SCP. The bundle is atomic. If the connection drops, the VPS never sees a half-baked set of images.
+Streams images directly to the VPS via a compressed SSH pipe (`docker save |
+gzip | ssh "gunzip | docker load"`). No temp files, no SCP. Verifies each
+image loaded successfully before returning.
 
 ### remote-rebuild
 
@@ -87,9 +89,8 @@ Saves one or more images into a single tar archive and uploads it to the VPS via
 deploycli remote-rebuild [user]@[ip]:[deploy_path] --image [image]:[tag] [--image ...] [--port 22] [--json]
 ```
 
-Over SSH: stops the stack, loads the new bundle, brings everything back
-up (waits for healthy containers if a healthcheck is defined), and prunes
-dangling images.
+Over SSH: stops the stack, brings it back up (waits for healthy containers
+if a healthcheck is defined), and prunes dangling images. Run after `send`.
 
 ### remote-status
 
@@ -105,7 +106,17 @@ Runs `docker compose ps` on the VPS and prints the output. Useful as a sanity ch
 deploycli remote-clean [user]@[ip]:[deploy_path] [--port 22] [--json]
 ```
 
-Deletes leftover `bundle.tar` from the deploy path. `remote-rebuild` removes it automatically on success, but if a rebuild fails (or never runs), the file sits there. Use this to clean up.
+Removes leftover files from the deploy path. Useful after a failed deploy to
+reset state before retrying.
+
+### prune-builder
+
+```
+deploycli prune-builder
+```
+
+Runs `docker builder prune -af` locally. Clears the build cache. Useful when
+a build fails or after many builds to reclaim disk space.
 
 ### Flags
 
@@ -123,7 +134,7 @@ Deletes leftover `bundle.tar` from the deploy path. `remote-rebuild` removes it 
 | 1 | usage error or something unexpected |
 | 10 | git failed (fetch or pull) |
 | 20 | docker build failed |
-| 30 | transfer failed (docker save or scp) |
+| 30 | transfer failed (pipe or image load) |
 | 40 | remote failed (ssh, docker compose, cleanup) |
 
 A calling backend can branch on these numbers without parsing any text.
@@ -141,18 +152,18 @@ deploycli build ~/projects/myapp/api      api      latest
 deploycli build ~/projects/myapp/worker   worker   latest
 deploycli build ~/projects/myapp/scheduler scheduler latest
 
-# 3. Bundle and ship to the VPS
+# 3. Send images directly to the VPS (compressed SSH pipe)
 deploycli send root@1.2.3.4:/opt/deploy/myapp \
   --image api:latest --image worker:latest --image scheduler:latest
 
-# 4. Rebuild the remote stack
+# 4. Restart the remote stack
 deploycli remote-rebuild root@1.2.3.4:/opt/deploy/myapp \
   --image api:latest --image worker:latest --image scheduler:latest
 
 # 5. Check everything came up
 deploycli remote-status root@1.2.3.4:/opt/deploy/myapp
 
-# 6. If remote-rebuild fails, clean up the leftover bundle before retrying
+# 6. Clean up if something went wrong
 deploycli remote-clean root@1.2.3.4:/opt/deploy/myapp
 ```
 
@@ -170,11 +181,16 @@ Arguments are parsed with a hand-rolled loop instead of `flag` because flags lik
 
 **Non interactive only.** SSH uses `BatchMode=yes` so a rejected key fails immediately instead of hanging. `StrictHostKeyChecking=accept-new` means first-time connections don't prompt. No `sudo` anywhere. The remote user touches the docker socket directly.
 
-**Atomic transfer.** `send` saves all images into one tar. If SCP drops mid-transfer, the VPS has nothing new. The old stack keeps running until `remote-rebuild` finishes cleanly.
+**Atomic pipe transfer.** `send` streams images through a single compressed SSH
+pipe. If the connection drops mid-transfer, the remote Docker daemon rejects
+the partial load and the old images stay intact.
 
-**One image per build, many per send.** `build` does one image because the caller might build them in parallel. `send` and `remote-rebuild` handle multiple images because the atomic-bundle guarantee requires it.
+**One image per build, many per send.** `build` does one image because the
+caller might build them in parallel. `send` handles multiple images in a
+single pipe.
 
-**Per-invocation temp dirs.** Uses `os.MkdirTemp`, not a fixed directory. Parallel deploys never collide.
+**No temp files.** `send` streams directly over SSH; `remote-rebuild` only
+restarts containers. No intermediate tar archives on either side.
 
 **Centralised constants.** `internal/static` holds every hardcoded string (binary names, SSH flags, default port, install URLs). Nothing is duplicated across the codebase.
 

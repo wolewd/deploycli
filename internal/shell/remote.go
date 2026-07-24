@@ -122,3 +122,35 @@ func ScpUpload(t *Target, localPath, remoteDir string) error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+// PipeImages streams docker save through gzip and SSH directly into docker
+// load on the remote. No temp files, no SCP.
+func PipeImages(t *Target, images []string) error {
+	sshArgs := append(sshBaseArgs(t.Port), t.UserHost(), "gunzip | docker load")
+
+	save := exec.Command(static.BinDocker, append([]string{"save"}, images...)...)
+	gzip := exec.Command("gzip")
+	sshCmd := exec.Command(static.BinSSH, sshArgs...)
+
+	gzip.Stdin, _ = save.StdoutPipe()
+	sshCmd.Stdin, _ = gzip.StdoutPipe()
+	sshCmd.Stdout = os.Stderr
+	sshCmd.Stderr = os.Stderr
+
+	if err := gzip.Start(); err != nil {
+		return fmt.Errorf("gzip: %w", err)
+	}
+	if err := sshCmd.Start(); err != nil {
+		return fmt.Errorf("ssh: %w", err)
+	}
+	if err := save.Run(); err != nil {
+		return fmt.Errorf("docker save: %w", err)
+	}
+	if err := gzip.Wait(); err != nil {
+		return fmt.Errorf("gzip: %w", err)
+	}
+	if err := sshCmd.Wait(); err != nil {
+		return fmt.Errorf("docker load on remote: %w", err)
+	}
+	return nil
+}

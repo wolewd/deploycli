@@ -38,6 +38,8 @@ func main() {
 		commands.RemoteStatus(args)
 	case "remote-clean":
 		commands.RemoteClean(args)
+	case "prune-builder":
+		commands.PruneBuilder(args)
 	case "-h", "--help", "help":
 		printUsage()
 	default:
@@ -57,6 +59,7 @@ func printUsage() {
   deploycli remote-rebuild [user]@[ip]:[deploy_path] --image [image_name]:[image_tag] [--image ...] [--port 22] [--json]
   deploycli remote-status [user]@[ip]:[deploy_path] [--port 22] [--json]
   deploycli remote-clean [user]@[ip]:[deploy_path] [--port 22] [--json]
+  deploycli prune-builder
 
 Notes:
   - SSH auth uses ~/.ssh/id_rsa (the default key), no config file is read.
